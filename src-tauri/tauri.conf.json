@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "مخبز أولاد عثمان",
+  "version": "1.0.0",
+  "identifier": "com.oladothman.bakerypos",
+  "build": { "beforeDevCommand": "npm run dev", "devUrl": "http://localhost:3000", "beforeBuildCommand": "npm run build", "frontendDist": "../out" },
+  "app": { "windows": [{ "title": "مخبز أولاد عثمان", "width": 1280, "height": 820, "minWidth": 860, "minHeight": 620 }], "security": { "csp": "default-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' asset: http://asset.localhost data: blob:; script-src 'self' 'unsafe-inline'" } },
+  "bundle": { "active": true, "targets": ["msi", "nsis"], "category": "Business", "shortDescription": "نظام نقاط بيع مخبز أولاد عثمان", "windows": { "webviewInstallMode": { "type": "offlineInstaller", "silent": true }, "nsis": { "displayLanguageSelector": false } } }
+}

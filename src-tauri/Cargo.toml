@@ -1,0 +1,19 @@
+[package]
+name = "othman-bakery-pos"
+version = "1.0.0"
+description = "مخبز أولاد عثمان POS"
+authors = ["مخبز أولاد عثمان"]
+edition = "2021"
+
+[lib]
+name = "othman_bakery_pos_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Graphics_Printing"] }
