@@ -16,6 +16,8 @@ test('accepts positive whole-number quantities', () => {
   for (const value of ['1', '10', '50', '100']) {
     assert.equal(parseQuantity(value), Number(value));
   }
+  assert.equal(parseQuantity('٥٠'), 50);
+  assert.equal(parseQuantity('۵۰'), 50);
 });
 
 test('rejects invalid prices and quantities', () => {

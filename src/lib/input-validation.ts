@@ -6,7 +6,9 @@ export function parsePrice(value: string): number | null {
 }
 
 export function parseQuantity(value: string): number | null {
-  const normalized = value.trim();
+  const normalized = value.trim()
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x660))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x6f0));
   if (!/^\d+$/.test(normalized)) return null;
   const quantity = Number(normalized);
   return Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= 100_000

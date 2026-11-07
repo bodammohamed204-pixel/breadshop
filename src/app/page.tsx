@@ -28,6 +28,7 @@ export default function Home() {
   const [queues, setQueues] = useState<QueueInfo[]>([]);
   const [queueName, setQueueName] = useState('');
   const [queuePresent, setQueuePresent] = useState(false);
+  const quantityInput = useRef<HTMLInputElement>(null);
   const printLock = useRef(false);
   const saleLock = useRef(false);
 
@@ -70,7 +71,7 @@ export default function Home() {
 
   const saveSaleAndPrint = async (copies: 1 | 2 | 3) => {
     if (!product || saleLock.current) return;
-    const amount = parseQuantity(quantity);
+    const amount = parseQuantity(quantityInput.current?.value ?? quantity);
     if (amount === null) {
       notify('أدخل كمية صحيحة من 1 إلى 100000 رغيف.', 'error');
       return;
@@ -284,7 +285,7 @@ export default function Home() {
           {product && current && <section className="quick-sale-panel" aria-label={`بيع ${current.name}`}>
             <div className="quick-sale-heading"><div><span className="dialog-kicker">البيع السريع</span><h2>{current.name}</h2></div><button type="button" className="cancel-action quick-cancel" disabled={saving || printing} onClick={() => { setProduct(null); setQuantity(''); }}>إلغاء</button></div>
             <div className="quick-sale-fields">
-              <label className="quantity-label">الكمية<input autoFocus type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" placeholder="اكتب الكمية" value={quantity} onChange={(event) => setQuantity(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveSaleAndPrint(1); } }} aria-describedby="quantity-help"/></label>
+              <label className="quantity-label">الكمية<input ref={quantityInput} autoFocus type="text" inputMode="numeric" autoComplete="off" placeholder="اكتب الكمية" value={quantity} onChange={(event) => setQuantity(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveSaleAndPrint(1); } }} aria-describedby="quantity-help"/></label>
               <div className="quick-unit-price"><span>سعر الوحدة</span><b>{money(current.price)}</b></div>
             </div>
             <span className="field-help" id="quantity-help">اكتب عدداً صحيحاً من 1 إلى 100000 ثم اختر عدد النسخ.</span>
