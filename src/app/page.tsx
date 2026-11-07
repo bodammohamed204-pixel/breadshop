@@ -5,6 +5,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { Check, Clock3, Printer, RefreshCw, Settings as SettingsIcon, X } from 'lucide-react';
 import { addSale, initialStore, loadStore, saveStore, type ProductId, type Sale, type Store } from '@/lib/models';
 import { calculateTotal, parsePrice, parseQuantity } from '@/lib/input-validation';
+import { getReceiptPreview } from '@/lib/receipt-preview';
 import { listPrinters, printCopies, saveNativePrinter, testNativePrinter, type QueueInfo } from '@/lib/printer';
 
 type Screen = 'sale' | 'settings';
@@ -20,6 +21,8 @@ export default function Home() {
   const [product, setProduct] = useState<ProductId | null>(null);
   const [quantity, setQuantity] = useState('1');
   const [sale, setSale] = useState<Sale | null>(null);
+  const [previewSale, setPreviewSale] = useState<Sale | null>(null);
+  const [previewZoom, setPreviewZoom] = useState(1);
   const [saving, setSaving] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -87,6 +90,7 @@ export default function Home() {
     try {
       const receipt = await addSale(product, amount);
       setSale(receipt);
+      setPreviewSale(receipt);
       await refresh();
       setProduct(null);
       notify('تم تأكيد البيع وحفظه. اختر عدد النسخ للطباعة.');
@@ -101,11 +105,11 @@ export default function Home() {
   const print = async (receipt: Sale, count: 1 | 2 | 3) => {
     if (printLock.current) return;
     if (isTauri() && !store.printer?.printer_name) {
-      notify('اختر الطابعة واحفظها من الإعدادات قبل الطباعة.', 'error');
+      setPreviewSale(receipt);
       return;
     }
     if (isTauri() && !queuePresent) {
-      notify('الطابعة المحفوظة غير متاحة. تحقق من توصيلها ثم أعد البحث عنها من الإعدادات.', 'error');
+      setPreviewSale(receipt);
       return;
     }
     printLock.current = true;
@@ -247,6 +251,9 @@ export default function Home() {
   const current = product ? store.products.find((item) => item.id === product) : null;
   const validQuantity = parseQuantity(quantity);
   const total = current && validQuantity !== null ? calculateTotal(validQuantity, current.price) : 0;
+  const receiptWidth = isTauri() ? (store.printer?.paper_width ?? width) : width;
+  const preview = previewSale ? getReceiptPreview(previewSale) : null;
+  const printerIssue = isTauri() && (!store.printer?.printer_name || !queuePresent);
 
   return (
     <main className="simple-app" dir="rtl">
@@ -279,7 +286,7 @@ export default function Home() {
             ))}
           </div>
           <div className="shortcut-strip"><span>{sale ? `آخر عملية محفوظة: ${sale.product_name} · ${sale.quantity} رغيف` : 'بعد تأكيد البيع، اطبع الإيصال بعدد النسخ المطلوب.'}</span><div><kbd>F12</kbd> نسخة <kbd>F11</kbd> نسختان <kbd>F10</kbd> ثلاث نسخ</div></div>
-          {sale && <div className="sale-confirmed"><Check size={19} aria-hidden="true"/><span>العملية محفوظة. اختر عدد النسخ:</span><div className="confirmed-actions"><button disabled={printing} onClick={() => void print(sale, 1)}>نسخة واحدة</button><button disabled={printing} onClick={() => void print(sale, 2)}>نسختان</button><button disabled={printing} onClick={() => void print(sale, 3)}>ثلاث نسخ</button></div></div>}
+          {sale && <div className="sale-confirmed"><Check size={19} aria-hidden="true"/><span>العملية محفوظة. يمكنك معاينة الإيصال أو الطباعة:</span><div className="confirmed-actions"><button onClick={() => setPreviewSale(sale)}>معاينة الإيصال</button><button disabled={printing} onClick={() => void print(sale, 1)}>نسخة واحدة</button><button disabled={printing} onClick={() => void print(sale, 2)}>نسختان</button><button disabled={printing} onClick={() => void print(sale, 3)}>ثلاث نسخ</button></div></div>}
         </section>
       ) : (
         <section className="settings-screen" aria-labelledby="settings-title">
@@ -325,6 +332,23 @@ export default function Home() {
             <div className="total-row"><span>الإجمالي</span><b>{money(total)}</b></div>
             <div className="dialog-actions"><button type="button" className="cancel-action" disabled={saving} onClick={() => setProduct(null)}>إلغاء</button><button className="primary-action" disabled={saving}>{saving ? 'جارٍ تأكيد البيع…' : 'تأكيد البيع'}</button></div>
           </form>
+        </div>
+      )}
+
+      {previewSale && preview && (
+        <div className="simple-backdrop receipt-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewSale(null); }}>
+          <section className="receipt-dialog" role="dialog" aria-modal="true" aria-labelledby="receipt-preview-title">
+            <header className="receipt-dialog-head"><div><span className="dialog-kicker">تم حفظ عملية البيع</span><h2 id="receipt-preview-title">معاينة الإيصال</h2></div><button type="button" className="close-button" onClick={() => setPreviewSale(null)} aria-label="إغلاق المعاينة"><X size={20}/></button></header>
+            <div className="receipt-preview-tools"><span>المقاس المستخدم للطباعة: {receiptWidth} مم</span><div><button type="button" aria-label="تصغير المعاينة" onClick={() => setPreviewZoom((value) => Math.max(.7, Math.round((value - .1) * 10) / 10))}>−</button><b>{Math.round(previewZoom * 100)}%</b><button type="button" aria-label="تكبير المعاينة" onClick={() => setPreviewZoom((value) => Math.min(1.5, Math.round((value + .1) * 10) / 10))}>+</button></div></div>
+            <div className="receipt-preview-viewport"><article className="receipt-paper" style={{ width: `${receiptWidth}mm`, transform: `scale(${previewZoom})` }}>
+              <h3>{preview.bakery}</h3><div className="receipt-rule"/>
+              <p>{preview.date}</p><p>{preview.weekday}</p><p>{preview.time}</p><div className="receipt-rule"/>
+              <p>{preview.transaction}</p><p>{preview.product}</p><p>{preview.quantity}</p><p>{preview.unitPrice}</p><p className="receipt-total">{preview.total}</p>
+              <div className="receipt-rule"/><p className="receipt-thanks">{preview.thanks}</p>
+            </article></div>
+            {printerIssue && <div className="receipt-printer-alert" role="status"><span>{store.printer?.printer_name ? 'الطابعة المحفوظة غير متاحة حالياً. أعد توصيلها أو اختر طابعة أخرى.' : 'لم يتم اختيار طابعة بعد. عملية البيع محفوظة ويمكنك معاينة الإيصال الآن.'}</span><button type="button" onClick={() => { setPreviewSale(null); setScreen('settings'); }}>إعدادات الطابعة</button></div>}
+            <footer className="receipt-dialog-actions"><button type="button" className="cancel-action" onClick={() => setPreviewSale(null)}>إغلاق</button><button type="button" className="primary-action" disabled={printing} onClick={() => void print(previewSale, 1)}>{printing ? 'جارٍ إرسال الإيصال…' : 'طباعة'}</button></footer>
+          </section>
         </div>
       )}
 
