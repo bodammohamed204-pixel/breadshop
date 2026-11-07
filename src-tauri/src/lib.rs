@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::os::windows::ffi::OsStrExt;
 use std::sync::atomic::{AtomicU64,Ordering};
 use tauri::Manager;
-use windows::{core::PCWSTR, Win32::{Foundation::{GetLastError, HANDLE, RECT}, Graphics::{Gdi::{CreateDCW, CreateFontW, DeleteDC, DeleteObject, DrawTextW, GetDeviceCaps, SelectObject, DEVMODEW, DM_IN_BUFFER, DM_OUT_BUFFER, HORZRES, LOGPIXELSY, FW_BOLD, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, DT_RIGHT, DT_RTLREADING, DT_SINGLELINE, DT_NOPREFIX}, Printing::{ClosePrinter, DocumentPropertiesW, EnumPrintersW, OpenPrinterW, PRINTER_ENUM_LOCAL, PRINTER_ENUM_CONNECTIONS, PRINTER_INFO_2W}}, Storage::{FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH}, Xps::{EndDoc, EndPage, StartDocW, StartPage, DOCINFOW}}, System::WindowsProgramming::MulDiv}};
+use windows::{core::PCWSTR, Win32::{Foundation::{GetLastError, HANDLE, RECT, COLORREF}, Graphics::{Gdi::{CreateDCW, CreateFontW, CreateSolidBrush, DeleteDC, DeleteObject, DrawTextW, FillRect, GetDeviceCaps, SelectObject, SetBkMode, SetTextColor, DEVMODEW, DM_IN_BUFFER, DM_OUT_BUFFER, HORZRES, LOGPIXELSY, FW_BOLD, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, DT_CENTER, DT_RIGHT, DT_RTLREADING, DT_SINGLELINE, DT_NOPREFIX, TRANSPARENT}, Printing::{ClosePrinter, DocumentPropertiesW, EnumPrintersW, OpenPrinterW, PRINTER_ENUM_LOCAL, PRINTER_ENUM_CONNECTIONS, PRINTER_INFO_2W}}, Storage::{FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH}, Xps::{EndDoc, EndPage, StartDocW, StartPage, DOCINFOW}}, System::WindowsProgramming::MulDiv}};
 #[derive(Serialize)] struct Printer{name:String,status:String,driver:String}
 #[derive(Deserialize)] struct Sale{id:i64,product_name:String,quantity:f64,unit_price:f64,total:f64,created_at:String}
 fn wide(s:&str)->Vec<u16>{s.encode_utf16().chain(std::iter::once(0)).collect()}
@@ -36,7 +36,61 @@ fn devmode_for_receipt(queue:&str,width:u16)->Result<Vec<u64>,String>{unsafe{
  if actual_width!=(width as i16)*10||actual_length!=RECEIPT_HEIGHT_TENTHS_MM||actual_fields&(DM_PAPER_WIDTH_FLAG|DM_PAPER_LENGTH_FLAG)!=(DM_PAPER_WIDTH_FLAG|DM_PAPER_LENGTH_FLAG){return Err(format!("تعريف الطابعة لم يقبل المقاس المخصص {}×90 مم (أعاد {}×{} مم). أضف المقاس من إعدادات Windows Printer Preferences.",width,actual_width as f32/10.0,actual_length as f32/10.0))}
  Ok(mode)
 }}
-fn print_gdi(queue:&str,s:&Sale,width:u16)->Result<String,String>{unsafe{let q=wide(queue);let driver=wide("WINSPOOL");let mut mode=devmode_for_receipt(queue,width)?;let dc=CreateDCW(PCWSTR(driver.as_ptr()),PCWSTR(q.as_ptr()),PCWSTR::null(),Some(mode.as_mut_ptr() as *const DEVMODEW));if dc.is_invalid(){return Err(last_error("تعذر فتح Windows Print Queue بالمقاس المطلوب"))}let title=wide(&format!("عملية {} - مخبز أولاد عثمان",s.id));let doc=DOCINFOW{cbSize:std::mem::size_of::<DOCINFOW>() as i32,lpszDocName:PCWSTR(title.as_ptr()),lpszOutput:PCWSTR::null(),lpszDatatype:PCWSTR::null(),fwType:0};if StartDocW(dc,&doc)<=0{let e=last_error("تعذر بدء مهمة الطباعة");let _=DeleteDC(dc);return Err(e)}let dpi=GetDeviceCaps(dc,LOGPIXELSY).max(96);let face=wide("Arial");let font=CreateFontW(-MulDiv(11,dpi,72),0,0,0,FW_BOLD.0 as i32,0,0,0,DEFAULT_CHARSET.0 as u32,OUT_DEFAULT_PRECIS.0 as u32,CLIP_DEFAULT_PRECIS.0 as u32,DEFAULT_QUALITY.0 as u32,DEFAULT_PITCH.0 as u32,PCWSTR(face.as_ptr()));let old=SelectObject(dc,font);if StartPage(dc)<=0{let e=last_error("تعذر بدء صفحة الطباعة");let _=EndDoc(dc);let _=DeleteObject(old);let _=DeleteObject(font);let _=DeleteDC(dc);return Err(e)}let stamp=DateTime::parse_from_rfc3339(&s.created_at).map(|d|d.with_timezone(&Local)).unwrap_or_else(|_|Local::now());let day=["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"][stamp.weekday().num_days_from_sunday() as usize];let month=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"][stamp.month0() as usize];let margin=MulDiv(3,dpi,25);let mut y=margin;let line=MulDiv(16,dpi,72);let right=GetDeviceCaps(dc,HORZRES).max(1)-margin;let rows=["مخبز أولاد عثمان".to_string(),"--------------------------------".into(),format!("التاريخ: {} {} {}",stamp.day(),month,stamp.year()),format!("اليوم: {}",day),format!("الوقت: {:02}:{:02}",stamp.hour(),stamp.minute()),"--------------------------------".into(),format!("رقم العملية: {}",s.id),format!("نوع العيش: {}",s.product_name),format!("الكمية: {}",s.quantity),format!("سعر الوحدة: {:.2} ج.م",s.unit_price),format!("الإجمالي: {:.2} ج.م",s.total),"--------------------------------".into(),"شكراً لزيارتكم".into()];for text in rows{let mut t:Vec<u16>=text.encode_utf16().collect();let mut rect=RECT{left:margin,top:y,right,bottom:y+line};if DrawTextW(dc,&mut t,&mut rect,DT_RIGHT|DT_RTLREADING|DT_SINGLELINE|DT_NOPREFIX)==0{let e=last_error("تعذر رسم الإيصال العربي");let _=EndPage(dc);let _=EndDoc(dc);let _=SelectObject(dc,old);let _=DeleteObject(font);let _=DeleteDC(dc);return Err(e)}y+=line}let job=EndDoc(dc);let _=SelectObject(dc,old);let _=DeleteObject(font);let _=DeleteDC(dc);if job<=0{return Err(last_error("تعذر إرسال المهمة إلى Windows Spooler"))}Ok(format!("أرسل Windows Spooler المهمة #{job}. قبول المهمة لا يؤكد خروج الورقة."))}}
+fn color_ref(red:u8,green:u8,blue:u8)->COLORREF{COLORREF((red as u32)|((green as u32)<<8)|((blue as u32)<<16))}
+unsafe fn fill_solid(dc:windows::Win32::Graphics::Gdi::HDC,rect:&RECT,color:COLORREF){let brush=CreateSolidBrush(color);let _=FillRect(dc,rect,brush);let _=DeleteObject(brush);}
+unsafe fn draw_receipt_text(dc:windows::Win32::Graphics::Gdi::HDC,text:&str,rect:&mut RECT,center:bool,color:COLORREF)->bool{let mut wide_text:Vec<u16>=text.encode_utf16().collect();let _=SetTextColor(dc,color);let flags=if center{DT_CENTER}else{DT_RIGHT}|DT_RTLREADING|DT_SINGLELINE|DT_NOPREFIX;DrawTextW(dc,&mut wide_text,rect,flags)!=0}
+unsafe fn draw_receipt_table(dc:windows::Win32::Graphics::Gdi::HDC,rows:&[(String,String)],left:i32,right:i32,y:&mut i32,row_height:i32,label_width:i32,border:i32,navy:COLORREF,label_color:COLORREF,black:COLORREF)->Result<(),String>{
+ let split=right-label_width;
+ for (label,value) in rows {
+  let top=*y;let bottom=top+row_height;
+  fill_solid(dc,&RECT{left:split,top,right,bottom},label_color);
+  fill_solid(dc,&RECT{left,top,right:split,bottom:top+border},navy);
+  fill_solid(dc,&RECT{left,top:bottom-border,right,bottom},navy);
+  fill_solid(dc,&RECT{left,top,right:left+border,bottom},navy);
+  fill_solid(dc,&RECT{left:split-border,top,right:split+border,bottom},navy);
+  fill_solid(dc,&RECT{left:right-border,top,right,bottom},navy);
+  let mut label_rect=RECT{left:split+border,top:top+border,right:right-border,bottom:bottom-border};
+  let mut value_rect=RECT{left:left+border,top:top+border,right:split-border,bottom:bottom-border};
+  if !draw_receipt_text(dc,label,&mut label_rect,true,black)||!draw_receipt_text(dc,value,&mut value_rect,false,black){return Err(last_error("تعذر رسم صف الإيصال العربي"))}
+  *y=bottom;
+ }
+ Ok(())
+}
+fn print_gdi(queue:&str,s:&Sale,width:u16)->Result<String,String>{unsafe{
+ let q=wide(queue);let driver=wide("WINSPOOL");let mut mode=devmode_for_receipt(queue,width)?;
+ let dc=CreateDCW(PCWSTR(driver.as_ptr()),PCWSTR(q.as_ptr()),PCWSTR::null(),Some(mode.as_mut_ptr() as *const DEVMODEW));
+ if dc.is_invalid(){return Err(last_error("تعذر فتح Windows Print Queue بالمقاس المطلوب"))}
+ let title=wide(&format!("عملية {} - مخبز أولاد عثمان",s.id));
+ let doc=DOCINFOW{cbSize:std::mem::size_of::<DOCINFOW>() as i32,lpszDocName:PCWSTR(title.as_ptr()),lpszOutput:PCWSTR::null(),lpszDatatype:PCWSTR::null(),fwType:0};
+ if StartDocW(dc,&doc)<=0{let e=last_error("تعذر بدء مهمة الطباعة");let _=DeleteDC(dc);return Err(e)}
+ if StartPage(dc)<=0{let e=last_error("تعذر بدء صفحة الطباعة");let _=EndDoc(dc);let _=DeleteDC(dc);return Err(e)}
+ let dpi=GetDeviceCaps(dc,LOGPIXELSY).max(96);let face=wide("Arial");
+ let body_font=CreateFontW(-MulDiv(if width<=58{8}else{10},dpi,72),0,0,0,FW_BOLD.0 as i32,0,0,0,DEFAULT_CHARSET.0 as u32,OUT_DEFAULT_PRECIS.0 as u32,CLIP_DEFAULT_PRECIS.0 as u32,DEFAULT_QUALITY.0 as u32,DEFAULT_PITCH.0 as u32,PCWSTR(face.as_ptr()));
+ let banner_font=CreateFontW(-MulDiv(if width<=58{12}else{16},dpi,72),0,0,0,FW_BOLD.0 as i32,0,0,0,DEFAULT_CHARSET.0 as u32,OUT_DEFAULT_PRECIS.0 as u32,CLIP_DEFAULT_PRECIS.0 as u32,DEFAULT_QUALITY.0 as u32,DEFAULT_PITCH.0 as u32,PCWSTR(face.as_ptr()));
+ let footer_font=CreateFontW(-MulDiv(if width<=58{11}else{15},dpi,72),0,0,0,FW_BOLD.0 as i32,0,0,0,DEFAULT_CHARSET.0 as u32,OUT_DEFAULT_PRECIS.0 as u32,CLIP_DEFAULT_PRECIS.0 as u32,DEFAULT_QUALITY.0 as u32,DEFAULT_PITCH.0 as u32,PCWSTR(face.as_ptr()));
+ let old_font=SelectObject(dc,body_font);let _=SetBkMode(dc,TRANSPARENT);
+ let navy=color_ref(16,59,106);let label_color=color_ref(201,222,246);let black=color_ref(9,13,18);let white=color_ref(255,255,255);
+ let printable=GetDeviceCaps(dc,HORZRES).max(1);let margin=MulDiv(3,dpi,25);let left=margin;let right=printable-margin;let inner=(right-left).max(1);
+ let banner_height=(inner*9/100).max(MulDiv(5,dpi,25));let row_height=(inner*6/100).max(MulDiv(35,dpi,254));let gap=(inner*3/100).max(MulDiv(2,dpi,25));let border=MulDiv(1,dpi,254).max(1);let label_width=inner*29/100;
+ let mut y=margin;
+ let header_rect=RECT{left,top:y,right,bottom:y+banner_height};fill_solid(dc,&header_rect,navy);
+ let old=SelectObject(dc,banner_font);let mut header_text=RECT{left:left+border,top:y+border,right:right-border,bottom:y+banner_height-border};
+ let header_ok=draw_receipt_text(dc,"مخبز أولاد عثمان",&mut header_text,true,white);let _=SelectObject(dc,old);y+=banner_height+gap;
+ if !header_ok{let _=EndPage(dc);let _=EndDoc(dc);let _=SelectObject(dc,old_font);let _=DeleteObject(body_font);let _=DeleteObject(banner_font);let _=DeleteObject(footer_font);let _=DeleteDC(dc);return Err(last_error("تعذر رسم عنوان الإيصال العربي"))}
+ let stamp=DateTime::parse_from_rfc3339(&s.created_at).map(|d|d.with_timezone(&Local)).unwrap_or_else(|_|Local::now());
+ let day=["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"][stamp.weekday().num_days_from_sunday() as usize];
+ let month=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"][stamp.month0() as usize];
+ let date_rows=vec![("التاريخ:".into(),format!("{} {} {}",stamp.day(),month,stamp.year())),("اليوم:".into(),day.into()),("الوقت:".into(),format!("{:02}:{:02}",stamp.hour(),stamp.minute()))];
+ let mut y_ref=y;let table_result=draw_receipt_table(dc,&date_rows,left,right,&mut y_ref,row_height,label_width,border,navy,label_color,black);
+ y=y_ref+gap;
+ if table_result.is_ok(){fill_solid(dc,&RECT{left,top:y,right,bottom:y+border*2},navy);y+=border*2+gap;}
+ let sale_rows=vec![("نوع العيش:".into(),s.product_name.clone()),("الكمية:".into(),format!("{}",s.quantity)),("سعر الوحدة:".into(),format!("{:.2} ج.م",s.unit_price)),("الإجمالي:".into(),format!("{:.2} ج.م",s.total))];
+ let mut y_ref=y;let sale_result=draw_receipt_table(dc,&sale_rows,left,right,&mut y_ref,row_height,label_width,border,navy,label_color,black);y=y_ref+gap;
+ let result=table_result.and(sale_result);
+ if result.is_ok(){let footer_height=(inner*8/100).max(MulDiv(5,dpi,25));let footer_rect=RECT{left,top:y,right,bottom:y+footer_height};fill_solid(dc,&footer_rect,navy);let old=SelectObject(dc,footer_font);let mut footer_text=RECT{left:left+border,top:y+border,right:right-border,bottom:y+footer_height-border};let ok=draw_receipt_text(dc,"شكراً لزيارتكم",&mut footer_text,true,white);let _=SelectObject(dc,old);if !ok{let _=EndPage(dc);let _=EndDoc(dc);let _=SelectObject(dc,old_font);let _=DeleteObject(body_font);let _=DeleteObject(banner_font);let _=DeleteObject(footer_font);let _=DeleteDC(dc);return Err(last_error("تعذر رسم عبارة ختام الإيصال"))}}
+ let _=EndPage(dc);let job=EndDoc(dc);let _=SelectObject(dc,old_font);let _=DeleteObject(body_font);let _=DeleteObject(banner_font);let _=DeleteObject(footer_font);let _=DeleteDC(dc);
+ result?;if job<=0{return Err(last_error("تعذر إرسال المهمة إلى Windows Spooler"))}Ok(format!("أرسل Windows Spooler المهمة #{job}. قبول المهمة لا يؤكد خروج الورقة."))
+}}
 fn app_data_dir(app:&tauri::AppHandle)->Result<std::path::PathBuf,String>{let dir=app.path().app_data_dir().map_err(|e|e.to_string())?;std::fs::create_dir_all(&dir).map_err(|e|format!("تعذر تجهيز مجلد بيانات البرنامج: {e}"))?;Ok(dir)}
 fn queue_path(app:&tauri::AppHandle)->Result<std::path::PathBuf,String>{let current=app_data_dir(app)?.join("printer-queue.txt");if !current.exists(){if let Ok(old_dir)=app.path().app_config_dir(){let old=old_dir.join("printer-queue.txt");if old.exists(){std::fs::copy(old,&current).map_err(|e|format!("تعذر ترحيل اسم الطابعة المحفوظ: {e}"))?;}}}Ok(current)}
 fn store_path(app:&tauri::AppHandle)->Result<std::path::PathBuf,String>{Ok(app_data_dir(app)?.join("pos-store.json"))}

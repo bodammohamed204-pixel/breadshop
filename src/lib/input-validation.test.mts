@@ -32,18 +32,19 @@ test('calculates totals using integer minor units', () => {
 test('previews the exact confirmed amount for both bread types', () => {
   const base: Sale = { id: 1, product_id: 'baladi', product_name: 'عيش بلدي', quantity: 50, unit_price: 0.2, total: calculateTotal(50, 0.2), created_at: '2026-11-07T10:15:00.000Z', print_status: 'not_printed' };
   const baladi = getReceiptPreview(base);
-  assert.equal(baladi.product, 'نوع العيش: عيش بلدي');
-  assert.equal(baladi.quantity, 'الكمية: 50');
-  assert.equal(baladi.unitPrice, 'سعر الوحدة: 0.20 ج.م');
-  assert.equal(baladi.total, 'الإجمالي: 10.00 ج.م');
+  assert.equal(baladi.product, 'عيش بلدي');
+  assert.equal(baladi.quantity, '50');
+  assert.equal(baladi.unitPrice, '0.20 ج.م');
+  assert.equal(baladi.total, '10.00 ج.م');
   assert.equal(baladi.thanks, 'شكراً لزيارتكم');
 
   const free = getReceiptPreview({ ...base, product_id: 'free', product_name: 'عيش حر', unit_price: 1.5, total: calculateTotal(50, 1.5) });
-  assert.equal(free.product, 'نوع العيش: عيش حر');
-  assert.equal(free.total, 'الإجمالي: 75.00 ج.م');
+  assert.equal(free.product, 'عيش حر');
+  assert.equal(free.total, '75.00 ج.م');
   const html = receiptHtml(base, 58);
-  assert.match(html, /نوع العيش: عيش بلدي/);
-  assert.match(html, /الكمية: 50/);
-  assert.match(html, /سعر الوحدة: 0\.20 ج\.م/);
-  assert.match(html, /الإجمالي: 10\.00 ج\.م/);
+  assert.match(html, /<th>نوع العيش:<\/th><td>عيش بلدي<\/td>/);
+  assert.match(html, /<th>الكمية:<\/th><td>50<\/td>/);
+  assert.match(html, /<th>سعر الوحدة:<\/th><td>0\.20 ج\.م<\/td>/);
+  assert.match(html, /<th>الإجمالي:<\/th><td>10\.00 ج\.م<\/td>/);
+  assert.match(html, /--navy:#103b6a/);
 });

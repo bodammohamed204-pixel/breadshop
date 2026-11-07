@@ -340,11 +340,21 @@ export default function Home() {
           <section className="receipt-dialog" role="dialog" aria-modal="true" aria-labelledby="receipt-preview-title">
             <header className="receipt-dialog-head"><div><span className="dialog-kicker">تم حفظ عملية البيع</span><h2 id="receipt-preview-title">معاينة الإيصال</h2></div><button type="button" className="close-button" onClick={() => setPreviewSale(null)} aria-label="إغلاق المعاينة"><X size={20}/></button></header>
             <div className="receipt-preview-tools"><span>المقاس المستخدم للطباعة: {receiptWidth} مم</span><div><button type="button" aria-label="تصغير المعاينة" onClick={() => setPreviewZoom((value) => Math.max(.7, Math.round((value - .1) * 10) / 10))}>−</button><b>{Math.round(previewZoom * 100)}%</b><button type="button" aria-label="تكبير المعاينة" onClick={() => setPreviewZoom((value) => Math.min(1.5, Math.round((value + .1) * 10) / 10))}>+</button></div></div>
-            <div className="receipt-preview-viewport"><article className="receipt-paper" style={{ width: `${receiptWidth}mm`, transform: `scale(${previewZoom})` }}>
-              <h3>{preview.bakery}</h3><div className="receipt-rule"/>
-              <p>{preview.date}</p><p>{preview.weekday}</p><p>{preview.time}</p><div className="receipt-rule"/>
-              <p>{preview.transaction}</p><p>{preview.product}</p><p>{preview.quantity}</p><p>{preview.unitPrice}</p><p className="receipt-total">{preview.total}</p>
-              <div className="receipt-rule"/><p className="receipt-thanks">{preview.thanks}</p>
+            <div className="receipt-preview-viewport"><article className={`receipt-paper paper-${receiptWidth}`} style={{ width: `${receiptWidth}mm`, transform: `scale(${previewZoom})` }}>
+              <h3>{preview.bakery}</h3>
+              <table className="receipt-table receipt-meta"><tbody>
+                <tr><th>التاريخ:</th><td>{preview.date}</td></tr>
+                <tr><th>اليوم:</th><td>{preview.weekday}</td></tr>
+                <tr><th>الوقت:</th><td>{preview.time}</td></tr>
+              </tbody></table>
+              <div className="receipt-section-rule"/>
+              <table className="receipt-table receipt-sale"><tbody>
+                <tr><th>نوع العيش:</th><td>{preview.product}</td></tr>
+                <tr><th>الكمية:</th><td>{preview.quantity}</td></tr>
+                <tr><th>سعر الوحدة:</th><td>{preview.unitPrice}</td></tr>
+                <tr><th>الإجمالي:</th><td>{preview.total}</td></tr>
+              </tbody></table>
+              <h4>{preview.thanks}</h4>
             </article></div>
             {printerIssue && <div className="receipt-printer-alert" role="status"><span>{store.printer?.printer_name ? 'الطابعة المحفوظة غير متاحة حالياً. أعد توصيلها أو اختر طابعة أخرى.' : 'لم يتم اختيار طابعة بعد. عملية البيع محفوظة ويمكنك معاينة الإيصال الآن.'}</span><button type="button" onClick={() => { setPreviewSale(null); setScreen('settings'); }}>إعدادات الطابعة</button></div>}
             <footer className="receipt-dialog-actions"><button type="button" className="cancel-action" onClick={() => setPreviewSale(null)}>إغلاق</button><button type="button" className="primary-action" disabled={printing} onClick={() => void print(previewSale, 1)}>{printing ? 'جارٍ إرسال الإيصال…' : 'طباعة'}</button></footer>
