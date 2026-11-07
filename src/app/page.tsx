@@ -19,7 +19,7 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>('sale');
   const [now, setNow] = useState(new Date());
   const [product, setProduct] = useState<ProductId | null>(null);
-  const [quantity, setQuantity] = useState('1');
+  const [quantity, setQuantity] = useState('');
   const [sale, setSale] = useState<Sale | null>(null);
   const [previewSale, setPreviewSale] = useState<Sale | null>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -68,7 +68,7 @@ export default function Home() {
 
   const choose = (id: ProductId) => {
     setProduct(id);
-    setQuantity('1');
+    setQuantity('');
   };
 
   const confirmSale = async () => {
@@ -93,7 +93,8 @@ export default function Home() {
       setPreviewSale(receipt);
       await refresh();
       setProduct(null);
-      notify('تم تأكيد البيع وحفظه. اختر عدد النسخ للطباعة.');
+      notify('تم حفظ البيع. جارٍ إرسال نسخة للطباعة.');
+      void print(receipt, 1);
     } catch {
       notify('تعذر حفظ عملية البيع. لم تُحذف البيانات السابقة؛ حاول مرة أخرى.', 'error');
     } finally {
@@ -327,10 +328,10 @@ export default function Home() {
           <form className="sale-dialog" noValidate onSubmit={(event) => { event.preventDefault(); void confirmSale(); }}>
             <div className="dialog-head"><div><span className="dialog-kicker">عملية بيع جديدة</span><h2>{current.name}</h2></div><button type="button" className="close-button" onClick={() => setProduct(null)} disabled={saving} aria-label="إلغاء"><X size={20}/></button></div>
             <div className="unit-row"><span>سعر الوحدة</span><b>{money(current.price)}</b></div>
-            <label className="quantity-label">الكمية<input autoFocus type="number" min="1" max="100000" step="1" inputMode="numeric" value={quantity} onChange={(event) => setQuantity(event.target.value)} aria-describedby="quantity-help"/></label>
-            <span className="field-help" id="quantity-help">أدخل عدداً صحيحاً من 1 إلى 100000.</span>
+            <label className="quantity-label">الكمية<input autoFocus type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" placeholder="اكتب الكمية" value={quantity} onChange={(event) => setQuantity(event.target.value)} aria-describedby="quantity-help"/></label>
+            <span className="field-help" id="quantity-help">اكتب الكمية المطلوبة من 1 إلى 100000.</span>
             <div className="total-row"><span>الإجمالي</span><b>{money(total)}</b></div>
-            <div className="dialog-actions"><button type="button" className="cancel-action" disabled={saving} onClick={() => setProduct(null)}>إلغاء</button><button className="primary-action" disabled={saving}>{saving ? 'جارٍ تأكيد البيع…' : 'تأكيد البيع'}</button></div>
+            <div className="dialog-actions"><button type="button" className="cancel-action" disabled={saving} onClick={() => setProduct(null)}>إلغاء</button><button className="primary-action" disabled={saving}>{saving ? 'جارٍ الحفظ والطباعة…' : 'تأكيد البيع والطباعة'}</button></div>
           </form>
         </div>
       )}
