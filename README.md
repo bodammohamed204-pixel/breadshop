@@ -15,13 +15,14 @@ npm run dev
 
 ```powershell
 npm run build
+npm run test:validation
 ```
 
-الملفات الناتجة في `out/`. تحفظ نسخة الويب إعداداتها محلياً في IndexedDB. المتصفح يفتح نافذة الطباعة كحل احتياطي ولا يدعم الطباعة الصامتة المضمونة.
+الملفات الناتجة في `out/`. تحفظ نسخة الويب إعداداتها محلياً في IndexedDB. الخط العربي Cairo مضمّن محلياً داخل ملفات الواجهة. المتصفح يفتح نافذة الطباعة كحل احتياطي ولا يدعم الطباعة الصامتة المضمونة.
 
 ## Windows Desktop وUSB
 
-المنتج الأساسي المقصود هو Tauri 2 على Windows. متطلبات البناء: Node.js 20.9+، Rust stable باستخدام MSVC toolchain، وVisual Studio 2022 Build Tools مع workload **Desktop development with C++** ومكوّن MSVC/Windows SDK. بناء MSI يتطلب تفعيل Windows optional feature **VBScript**. WebView2 runtime مطلوب؛ إعداد هذا المشروع يضم مثبت WebView2 offline داخل حزمة Windows. راجع [متطلبات Tauri الرسمية](https://v2.tauri.app/start/prerequisites/) و[تعليمات Rust لويندوز](https://rust-lang.org/tools/install/).
+المنتج الأساسي هو Tauri 2 على Windows. متطلبات البناء: Node.js 20.9+، Rust stable مع MSVC toolchain، وVisual Studio C++ Build Tools مع workload **Desktop development with C++** وWindows SDK. هذا المشروع يضم مثبت WebView2 offline داخل حزمة Windows. راجع [متطلبات Tauri الرسمية](https://v2.tauri.app/start/prerequisites/) و[تعليمات Rust لويندوز](https://rust-lang.org/tools/install/).
 
 ```powershell
 npm install
@@ -37,11 +38,11 @@ rustc --version
 cargo --version
 ```
 
-ينتج MSI وNSIS EXE تحت `src-tauri/target/release/bundle/`. البناء الحالي تعذر في بيئة هذا المشروع لأن `cargo` غير موجود؛ الأوامر أعلاه موضحة للتشغيل بعد تثبيت المتطلبات وليست نتيجة build ناجح.
+ينتج MSI وNSIS EXE تحت `src-tauri/target/release/bundle/`. ملف EXE المستقل المبني حالياً هو `src-tauri/target/release/bundle/nsis/مخبز أولاد عثمان_1.0.0_x64-setup.exe`، ويضم WebView2 Offline Installer بحجم 214,927,568 بايت. يتيح ذلك تثبيت الـ runtime من ملف الحزمة دون تنزيله عبر الإنترنت.
 
 في إعدادات البرنامج: ابحث عن طابعات Windows المثبتة، اختر Windows Printer Queue الخاصة بالطابعة، حدد 58 أو 80 مم، ثم احفظها. الطباعة الأصلية تستخدم GDI عبر الـ Queue وتُعيد فحص وجودها عند فتح الواجهة/الطباعة. قبول Windows Spooler للمهمة لا يؤكد خروج الورقة.
 
-إعداد NSIS/MSI يضم WebView2 Offline Installer لتثبيته من دون إنترنت؛ هذا يزيد حجم الحزمة بنحو 127MB وفق [توثيق Tauri لخيار WebView2 offlineInstaller](https://v2.tauri.app/distribute/windows-installer/#webview2-installation-options). ملفات HTML وCSS وJavaScript والأيقونات المضمنة تُحزم محلياً. التطبيق لا يحمل خطوطاً أو موارد من CDN ولا يستدعي API خارجياً.
+إعداد NSIS/MSI يضم WebView2 Offline Installer. ملفات HTML وCSS وJavaScript والأيقونات تُحزم محلياً. التطبيق لا يحمل خطوطاً أو موارد من CDN ولا يستدعي API خارجياً.
 
 ثبّت تعريف الشركة المصنعة في Windows مرة واحدة إذا لزم. عند فصل USB، أعد توصيله وتحقق من أن الـ Queue تظهر في Windows، ثم أعد البحث من الإعدادات إذا لزم. لا يثبت التطبيق تعريف الطابعة.
 
@@ -49,7 +50,12 @@ cargo --version
 
 - إعدادات الأسعار والطابعة وآخر عمليات البيع في Windows تُحفظ في `%APPDATA%/com.oladothman.bakerypos/pos-store.json`، واسم queue في `printer-queue.txt`. التخزين الأصلي يستخدم ملفاً محلياً وكتابة ذرية بدلاً من WebView Local Storage؛ أول تشغيل ينقل بيانات IndexedDB القديمة إلى الملف. نسخة الويب تبقى على IndexedDB.
 - لا توجد APK ضمن النطاق الحالي.
-- نجح `npx tsc --noEmit` و`npm run build` لنسخة الويب.
-- لم تتوفر Rust/Cargo أو طابعة حرارية في بيئة التطوير؛ لذلك لم يُبنَ Tauri ولم يُختبر USB أو الإيصال العربي فعلياً. الطباعة تحتاج قبولاً على queue فعلية ومراجعة الورق/Arabic shaping على الطابعة المستهدفة قبل اعتمادها.
+- نجحت فحوص `npx tsc --noEmit --incremental false` و`npm run build` و`cargo check` وبناء `npm run tauri -- build --verbose --bundles nsis` في بيئة Windows الحالية.
+- اختبارات `npm run test:validation` تتحقق من أسعار 0.2 و1.5 و2.25، والكميات 1 و10 و50 و100، ورفض الصفر والقيم السالبة والكسور في الكمية، ودقة الإجمالي بالسنتات. الأسعار تُحسب بدقة منزلتين عشريتين.
+- الشاشة متجاوبة باستخدام شبكات مرنة ونقاط توقف للشاشات الصغيرة، وخط Cairo مضمّن من حزمة محلية ولا يحتاج إلى إنترنت.
+- تم بناء مثبت NSIS EXE مستقل، ونجح تضمين WebView2 Offline Installer فيه. لم يكتمل بناء MSI؛ أوقفنا محاولته بعد نجاح EXE لتجنب إعادة تنزيل runtime الكبير.
+- لا توجد طابعة حرارية مثبتة في بيئة التطوير؛ الطابعات الظاهرة Microsoft Print to PDF وOneNote. لذلك لم يُختبر USB أو خروج الورق أو تشكيل العربية فعلياً.
 - التنفيذ الحالي يستخدم مسار Windows GDI عبر تعريف الطابعة؛ لم يُنفذ إرسال ESC/POS خام بشكل مستقل. استخدم تعريف الشركة المصنّعة الذي يقبل مهام Windows العادية، واختبر فعلياً قبل التشغيل اليومي.
-- خيار الورق 58/80 محفوظ، لكن ضبط paper size داخل DEVMODE/تعريف الطابعة غير مربوط بعد؛ يلزم إصلاحه أو مطابقة مقاس الورق في خصائص queue قبل اعتماد الطباعة.
+- عند كل طباعة، يقرأ التطبيق عرض الورق المحفوظ من ملف الإعدادات المحلي، ويحصل على DEVMODE كامل من Windows `DocumentProperties`, ثم يطلب العرض 58/80 مم وارتفاع إيصال 90 مم (القيم بوحدة 0.1 مم) ويمرر DEVMODE المعتمد إلى GDI. إذا أعاد التعريف قيماً مختلفة أو رفض الإعداد، تتوقف المهمة برسالة تطلب إضافة المقاس المخصص في خصائص تعريف الطابعة. قبول المخصصات يعتمد على التعريف والطابعة؛ لا يمكن إثبات ذلك دون الجهاز الفعلي.
+- النص العربي يُرسم بـ `DrawTextW` مع `DT_RTLREADING`, `DT_RIGHT` وArial. هذا يحدد مسار Unicode والاتجاه لـ GDI، لكن سلامة التشكيل وعدم انعكاس الحروف تحتاج مراجعة إيصال فعلي على التعريف والطابعة المستهدفين.
+- نسخ F12/F11/F10 تُرسل كـ 1/2/3 مهام GDI منفصلة، و`e.repeat` وprint lock يمنعان إعادة الإرسال أثناء استمرار الضغط أو تنفيذ مهمة أخرى. آخر عملية البيع تبقى محفوظة قبل الطباعة، وتُستعاد إذا لم تُسجل كمهمة مقبولة.
